@@ -1,4 +1,0 @@
-/home/asalter/repos/CivilizationRevisited/cmake-build-debug/CMakeFiles/lua.dir
-/home/asalter/repos/CivilizationRevisited/cmake-build-debug/CMakeFiles/CivilizationRevisited.dir
-/home/asalter/repos/CivilizationRevisited/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/asalter/repos/CivilizationRevisited/cmake-build-debug/CMakeFiles/rebuild_cache.dir
