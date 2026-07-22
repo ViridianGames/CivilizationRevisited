@@ -1,3 +1,11 @@
+#include "CivFactions.h"
+#include "CivMapGenerator.h"
+#include "CivPlayer.h"
+#include "CivTile.h"
+#include "CustomizeWorldState.h"
+#include "DifficultyState.h"
+#include "FactionSelectState.h"
+#include "MapViewerState.h"
 #include "MainState.h"
 #include "OptionsState.h"
 #include "TitleState.h"
@@ -9,11 +17,21 @@ enum GameStates
     STATE_TITLESTATE = 0,
     STATE_MAINSTATE,
     STATE_OPTIONSSTATE,
-    STATE_COMBATSTATE,
-    STATE_CASTLEDESIGNSTATE,
-    STATE_SETUPGAMESTATE,
+    STATE_MAPVIEWERSTATE,
+    STATE_CUSTOMIZEWORLDSTATE,
+    STATE_DIFFICULTYSTATE,
+    STATE_FACTIONSELECTSTATE,
     STATE_LASTSTATE
 };
+
+// Earth uses the same map viewer; title preloads earth data into g_ViewMap.
+constexpr int STATE_EARTHMAPVIEWERSTATE = STATE_MAPVIEWERSTATE;
+
+// Active map for MapViewerState (Earth loader or random generator writes here).
+inline CivMapData g_ViewMap;
+
+// New-game setup (difficulty, civs, factions, cities).
+inline CivGameSetup g_GameSetup;
 
 struct ConsoleString
 {

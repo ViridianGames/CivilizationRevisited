@@ -168,9 +168,24 @@ set(SOURCES
         Source/Geist/StateMachine.cpp
         Source/Geist/TooltipSystem.cpp
 
+        Source/CivAdvances.cpp
+        Source/CivAI.cpp
+        Source/CivBuildings.cpp
+        Source/CivCity.cpp
+        Source/CivFactions.cpp
+        Source/CivGame.cpp
+        Source/CivMapGenerator.cpp
+        Source/CivTerrainYields.cpp
+        Source/CivTerritory.cpp
+        Source/CivTile.cpp
+        Source/CivUnits.cpp
+        Source/CustomizeWorldState.cpp
+        Source/DifficultyState.cpp
+        Source/FactionSelectState.cpp
         Source/GameGlobals.cpp
         Source/Main.cpp
         Source/MainState.cpp
+        Source/MapViewerState.cpp
         Source/OptionsState.cpp
         Source/TitleState.cpp
 )

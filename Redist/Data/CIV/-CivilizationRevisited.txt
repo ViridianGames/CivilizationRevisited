@@ -1,0 +1,1 @@
+Please copy the original Civilzation files (ADSCREEN.PIC, ARCH.PIC, etc) into this folder.

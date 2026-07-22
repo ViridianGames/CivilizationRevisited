@@ -6,16 +6,19 @@
 class TitleState : public State
 {
 public:
-    TitleState() {};
-    ~TitleState() override {};
+	TitleState() = default;
+	~TitleState() override = default;
 
-    void Init(const std::string& configfile) override;
-    void Shutdown() override;
-    void Update() override;
-    void Draw() override;
+	void Init(const std::string& configfile) override;
+	void Shutdown() override;
+	void Update() override;
+	void Draw() override;
 
-    void OnEnter() override;
-    void OnExit() override;
+	void OnEnter() override;
+	void OnExit() override;
+
+private:
+	int m_selected = 0;
 };
 
 #endif
