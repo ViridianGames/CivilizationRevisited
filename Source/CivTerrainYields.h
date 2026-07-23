@@ -32,6 +32,43 @@ inline const char* CivGovernmentName(CivGovernment g)
 	}
 }
 
+// --- Government capability helpers (Civ1) ---
+
+inline bool CivGovIsDespotic(CivGovernment g)
+{
+	return g == CivGovernment::Anarchy || g == CivGovernment::Despotism;
+}
+
+inline bool CivGovIsRepublicDemocratic(CivGovernment g)
+{
+	return g == CivGovernment::Republic || g == CivGovernment::Democracy;
+}
+
+// Martial law (military units calm citizens) under Anarchy/Despotism/Monarchy/Communism.
+inline bool CivGovAllowsMartialLaw(CivGovernment g)
+{
+	return !CivGovIsRepublicDemocratic(g);
+}
+
+// Unhappy citizens per military unit away from home city (0 / 1 / 2).
+inline int CivGovWarUnhappinessPerAwayUnit(CivGovernment g)
+{
+	switch (g)
+	{
+	case CivGovernment::Republic:  return 1;
+	case CivGovernment::Democracy: return 2;
+	default:                       return 0;
+	}
+}
+
+// Free home military units under Anarchy/Despotism equal city size; others get none.
+inline int CivGovFreeUnitSupportPerCity(CivGovernment g, int citySize)
+{
+	if (!CivGovIsDespotic(g))
+		return 0;
+	return citySize > 0 ? citySize : 0;
+}
+
 // Food / production (shields) / trade from a worked map tile.
 // Data reverse-engineered from CivOne tile classes + City.FoodValue/ShieldValue/TradeValue.
 struct CivYields

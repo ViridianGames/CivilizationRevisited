@@ -138,8 +138,7 @@ MainState::EmpireEcon MainState::ComputeEmpireEcon(const CivPlayer& player) cons
 	const CivCity* capital = pl.Capital();
 	const bool hasCapital = capital != nullptr;
 	const bool empireSeti = pl.HasWonder(CivWonder_SETIProgram);
-	const bool despotic = (pl.government == CivGovernment::Anarchy
-		|| pl.government == CivGovernment::Despotism);
+	const bool despotic = CivGovIsDespotic(pl.government);
 
 	for (CivCity& c : pl.cities)
 	{
@@ -149,14 +148,22 @@ MainState::EmpireEcon MainState::ComputeEmpireEcon(const CivPlayer& player) cons
 		const CivYields y = c.ComputeWorkedYields(map, pl.government);
 
 		int homeSettlers = 0;
+		int homeSupport = 0;
 		if (g_Game.started)
 		{
 			for (const auto& u : g_Game.units)
-				if (u.Valid() && u.owner == pl.id && u.IsSettlers() && u.homeCityId == c.id)
+			{
+				if (!u.Valid() || u.owner != pl.id || u.homeCityId != c.id)
+					continue;
+				if (u.IsSettlers())
 					++homeSettlers;
+				if (u.RequiresShieldSupport())
+					++homeSupport;
+			}
 		}
 		e.foodSurplus += c.FoodIncome(y.food, homeSettlers, despotic);
-		e.shields += y.shields;
+		const int support = CivCity::ComputeShieldSupportCost(pl.government, c.size, homeSupport);
+		e.shields += c.ComputeShieldIncome(y.shields, support, c.InDisorder());
 
 		int dist = hasCapital
 			? CivMapDistance(c.x, c.y, capital->x, capital->y, map.width)
@@ -187,16 +194,23 @@ void MainState::ComputeCityYields(const CivPlayer& player, const CivCity& city,
 	const CivYields y = c.ComputeWorkedYields(map, player.government);
 
 	int homeSettlers = 0;
+	int homeSupport = 0;
 	if (g_Game.started)
 	{
 		for (const auto& u : g_Game.units)
-			if (u.Valid() && u.owner == player.id && u.IsSettlers() && u.homeCityId == c.id)
+		{
+			if (!u.Valid() || u.owner != player.id || u.homeCityId != c.id)
+				continue;
+			if (u.IsSettlers())
 				++homeSettlers;
+			if (u.RequiresShieldSupport())
+				++homeSupport;
+		}
 	}
-	const bool despotic = (player.government == CivGovernment::Anarchy
-		|| player.government == CivGovernment::Despotism);
+	const bool despotic = CivGovIsDespotic(player.government);
 	outFood = c.FoodIncome(y.food, homeSettlers, despotic);
-	outShields = y.shields;
+	const int support = CivCity::ComputeShieldSupportCost(player.government, c.size, homeSupport);
+	outShields = c.ComputeShieldIncome(y.shields, support, c.InDisorder());
 	outTrade = y.trade;
 }
 
@@ -425,6 +439,12 @@ void MainState::DrawCitiesTab(const CivPlayer& player, float x, float y, float w
 		snprintf(ybuf, sizeof(ybuf), "Prod %d/t", sh);
 		lines.emplace_back(ybuf);
 		snprintf(ybuf, sizeof(ybuf), "Trade %d/t", tr);
+		lines.emplace_back(ybuf);
+		snprintf(ybuf, sizeof(ybuf), "Gov %s", CivGovernmentName(player.government));
+		lines.emplace_back(ybuf);
+		snprintf(ybuf, sizeof(ybuf), "Mood H%d C%d U%d%s",
+			sel->happy, sel->content, sel->unhappy,
+			sel->InDisorder() ? " DISORDER" : "");
 		lines.emplace_back(ybuf);
 		if (sel->production.kind == CivProductionKind::Unit)
 		{

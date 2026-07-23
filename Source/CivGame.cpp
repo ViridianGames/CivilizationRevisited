@@ -158,12 +158,21 @@ void CivGame::ProcessCityProduction(CivPlayer& player, CivCity& city, RNG& rng)
 		return;
 	}
 
-	// Shield income from worked tiles.
+	// Shield income from worked tiles, minus unit support (CivOne ShieldIncome).
 	city.AutoAssignWorkedTiles(map, player.government, nullptr);
-	CivYields y = city.ComputeWorkedYields(map, player.government);
-	int shields = city.InDisorder() ? 0 : y.shields;
+	const CivYields y = city.ComputeWorkedYields(map, player.government);
 
-	// AI production bonus by difficulty.
+	int homeSupportUnits = 0;
+	for (const CivUnitInstance& u : units)
+	{
+		if (u.Valid() && u.owner == player.id && u.homeCityId == city.id && u.RequiresShieldSupport())
+			++homeSupportUnits;
+	}
+	const int supportCost = CivCity::ComputeShieldSupportCost(
+		player.government, city.size, homeSupportUnits);
+	int shields = city.ComputeShieldIncome(y.shields, supportCost, city.InDisorder());
+
+	// AI production bonus by difficulty (applied to net shields after support).
 	if (player.IsAI())
 	{
 		const int tenths = CivAIShieldBonusTenths(setup.difficulty);
@@ -220,18 +229,115 @@ void CivGame::ProcessPlayerEconomy(CivPlayer& player, RNG& rng)
 	if (!player.IsAlive())
 		return;
 
-	// Food growth.
-	player.ProcessAllCitiesFoodTurn(map, nullptr);
+	// Count home settlers per city for food upkeep.
+	std::vector<int> homeSettlers(player.cities.size(), 0);
+	for (size_t i = 0; i < player.cities.size(); ++i)
+	{
+		const CivCity& c = player.cities[i];
+		if (!c.Valid())
+			continue;
+		for (const CivUnitInstance& u : units)
+		{
+			if (u.Valid() && u.owner == player.id && u.IsSettlers() && u.homeCityId == c.id)
+				++homeSettlers[i];
+		}
+	}
 
-	// Trade → gold / science / luxuries.
-	player.ProcessAllCitiesTradeTurn(map, true);
+	player.ClampBudgetRates();
+	const CivBudgetRates budget = player.BudgetRates();
+	const CivCity* capital = player.Capital();
+	const bool hasCapital = capital != nullptr;
+	const bool empireSeti = player.HasWonder(CivWonder_SETIProgram);
+	const int freeContent = CivFreeContentCitizens(setup.difficulty, player.IsHuman());
+	const bool hasMysticism = player.HasAdvance(static_cast<int>(CivAdvanceId::Mysticism));
+	const bool empireOracle = player.HasWonder(CivWonder_Oracle);
+	const bool empireHG = player.HasWonder(CivWonder_HangingGardens);
+	const bool empireCure = player.HasWonder(CivWonder_CureForCancer);
+	const bool empireSuffrage = player.HasWonder(CivWonder_WomensSuffrage);
 
-	// Production.
+	bool bachContinent[256] = {};
+	for (const CivCity& c : player.cities)
+	{
+		if (!c.Valid() || !c.HasWonder(CivWonder_JSBachsCathedral))
+			continue;
+		bachContinent[map.TileAt(c.x, c.y).continentId] = true;
+	}
+
+	// 1) Assign tiles + compute trade (luxuries) without applying gold yet.
+	//    Tax zeroing uses prior-turn disorder; after happiness we re-apply taxes.
+	struct CityTradeScratch
+	{
+		CivCityTradeBreakdown b{};
+	};
+	std::vector<CityTradeScratch> tradeScratch(player.cities.size());
+
+	int totMaintenance = 0;
+	int totScience = 0;
+	for (size_t i = 0; i < player.cities.size(); ++i)
+	{
+		CivCity& c = player.cities[i];
+		if (!c.Valid())
+			continue;
+
+		const int dist = hasCapital
+			? CivMapDistance(c.x, c.y, capital->x, capital->y, map.width)
+			: 32;
+
+		// First pass: luxuries always produced; taxes use previous disorder flag.
+		tradeScratch[i].b = c.ProcessTradeTurnFromMap(
+			map, budget, player.government, dist, hasCapital,
+			c.wasInDisorder || c.InDisorder(), empireSeti);
+
+		// 2) Happiness from luxuries + government unit rules.
+		int martial = 0;
+		int away = 0;
+		for (const CivUnitInstance& u : units)
+		{
+			if (!u.Valid() || u.owner != player.id)
+				continue;
+			if (u.CountsForMartialLaw() && u.x == c.x && u.y == c.y)
+				++martial;
+			if (u.homeCityId == c.id && u.CanCauseWarUnhappiness()
+				&& (u.x != c.x || u.y != c.y))
+				++away;
+		}
+
+		CivCity::HappinessParams hp;
+		hp.government = player.government;
+		hp.luxuries = tradeScratch[i].b.luxuries;
+		hp.freeContent = freeContent;
+		hp.hasMysticism = hasMysticism;
+		hp.empireHasOracle = empireOracle;
+		hp.empireHasHangingGardens = empireHG;
+		hp.empireHasCureForCancer = empireCure;
+		hp.empireHasBachOnContinent = bachContinent[map.TileAt(c.x, c.y).continentId];
+		hp.martialLawUnits = martial;
+		hp.awayMilitaryUnits = away;
+		hp.hasWomensSuffrage = empireSuffrage;
+		c.UpdateHappiness(hp);
+
+		// Recompute taxes under *current* disorder (science/luxuries unchanged).
+		const CivCityTradeBreakdown taxed = c.ComputeTradeBreakdownFromMap(
+			map, budget, player.government, dist, hasCapital,
+			c.InDisorder(), empireSeti);
+		tradeScratch[i].b.taxes = taxed.taxes;
+
+		totMaintenance += tradeScratch[i].b.maintenance;
+		totScience += tradeScratch[i].b.science;
+		player.gold += tradeScratch[i].b.taxes;
+	}
+
+	player.gold -= totMaintenance;
+	player.science += totScience;
+
+	// 3) Food growth (uses updated disorder).
+	player.ProcessAllCitiesFoodTurn(map, &homeSettlers);
+
+	// 4) Production (uses updated disorder + unit support costs).
 	for (CivCity& c : player.cities)
 	{
 		if (!c.Valid())
 			continue;
-		// Ensure AI has a build order before shields apply.
 		if (player.IsAI() && c.production.kind == CivProductionKind::None)
 			CivAI::ChooseCityProduction(player, c, map, units, setup.difficulty, rng);
 		ProcessCityProduction(player, c, rng);

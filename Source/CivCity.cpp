@@ -676,6 +676,145 @@ CivCityTradeBreakdown CivCity::ProcessTradeTurnFromMap(
 }
 
 // ---------------------------------------------------------------------------
+// Unit shield support + production income
+// ---------------------------------------------------------------------------
+
+int CivCity::ComputeShieldSupportCost(CivGovernment government, int citySize,
+	int homeSupportUnitCount)
+{
+	if (homeSupportUnitCount <= 0)
+		return 0;
+
+	const int free = CivGovFreeUnitSupportPerCity(government, citySize);
+	if (homeSupportUnitCount <= free)
+		return 0;
+	return homeSupportUnitCount - free;
+}
+
+int CivCity::ApplyFactoryBonus(int tileShields) const
+{
+	int shields = std::max(0, tileShields);
+	if (HasBuilding(CivBld_Factory))
+	{
+		// CivOne: +50% normally, +100% with Nuclear Plant.
+		const double factor = HasBuilding(CivBld_NuclearPlant) ? 1.0 : 0.5;
+		shields += static_cast<int>(std::floor(static_cast<double>(shields) * factor));
+	}
+	return shields;
+}
+
+int CivCity::ComputeShieldIncome(int tileShields, int supportCost, bool inDisorder) const
+{
+	if (inDisorder)
+		return 0;
+	const int total = ApplyFactoryBonus(tileShields);
+	const int net = total - std::max(0, supportCost);
+	return net > 0 ? net : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Citizen happiness (CivOne City.Citizens + martial law / war unhappiness)
+// ---------------------------------------------------------------------------
+
+void CivCity::UpdateHappiness(const HappinessParams& params)
+{
+	if (!Valid())
+	{
+		happy = content = unhappy = 0;
+		return;
+	}
+
+	// Happy from luxuries (2 luxuries → 1 happy) + empire wonders.
+	int happyCount = static_cast<int>(std::floor(static_cast<double>(std::max(0, params.luxuries)) / 2.0));
+	if (params.empireHasHangingGardens || HasWonder(CivWonder_HangingGardens))
+		++happyCount;
+	if (params.empireHasCureForCancer || HasWonder(CivWonder_CureForCancer))
+		++happyCount;
+
+	// Base unhappiness: size beyond free content, after happy citizens are filled.
+	// CivOne: unhappyCount = Size - (6 - Difficulty) - happyCount
+	// freeContent == (6 - Difficulty) [with AI adjustments].
+	int unhappyCount = size - params.freeContent - happyCount;
+
+	if (HasWonder(CivWonder_ShakespearesTheatre))
+	{
+		unhappyCount = 0;
+	}
+	else
+	{
+		if (HasBuilding(CivBld_Temple))
+		{
+			int templeEffect = 1;
+			if (params.hasMysticism)
+				templeEffect <<= 1;
+			if (params.empireHasOracle)
+				templeEffect <<= 1;
+			unhappyCount -= templeEffect;
+		}
+		if (params.empireHasBachOnContinent)
+			unhappyCount -= 2;
+		if (HasBuilding(CivBld_Colosseum))
+			unhappyCount -= 3;
+		if (HasBuilding(CivBld_Cathedral))
+			unhappyCount -= 4;
+
+		// Martial law: up to 3 military units in city under non-rep/dem governments.
+		if (CivGovAllowsMartialLaw(params.government))
+		{
+			const int ml = std::clamp(params.martialLawUnits, 0, 3);
+			unhappyCount -= ml;
+		}
+
+		// Republic / Democracy: units away from home city cause unhappiness.
+		const int perAway = CivGovWarUnhappinessPerAwayUnit(params.government);
+		if (perAway > 0 && params.awayMilitaryUnits > 0)
+		{
+			int warUnhappy = params.awayMilitaryUnits * perAway;
+			if (params.hasWomensSuffrage)
+				warUnhappy = (warUnhappy + 1) / 2; // soften with Women's Suffrage
+			unhappyCount += warUnhappy;
+		}
+	}
+
+	if (unhappyCount < 0)
+		unhappyCount = 0;
+	if (happyCount < 0)
+		happyCount = 0;
+
+	// Assign working citizens (all size for now — no specialists system yet).
+	// CivOne: first happy, then force remaining unhappiness onto last workers, rest content.
+	int outHappy = 0;
+	int outUnhappy = 0;
+	int outContent = 0;
+	int remainingUnhappy = unhappyCount;
+	int remainingHappy = happyCount;
+
+	for (int i = 0; i < size; ++i)
+	{
+		if (remainingHappy > 0)
+		{
+			--remainingHappy;
+			++outHappy;
+			continue;
+		}
+		// If enough unhappiness remains that every remaining citizen would need to be
+		// unhappy (CivOne: (unhappyCount - (working - i)) >= 0), place unhappy.
+		const int remainingWorkers = size - i;
+		if (remainingUnhappy > 0 && (remainingUnhappy - remainingWorkers) >= 0)
+		{
+			--remainingUnhappy;
+			++outUnhappy;
+			continue;
+		}
+		++outContent;
+	}
+
+	happy = outHappy;
+	content = outContent;
+	unhappy = outUnhappy;
+}
+
+// ---------------------------------------------------------------------------
 // Building id → city bitflag
 // ---------------------------------------------------------------------------
 

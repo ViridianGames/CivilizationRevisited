@@ -57,6 +57,27 @@ struct CivUnitInstance
 
 	const CivUnitDef& Def() const { return CivUnit(typeId); }
 	bool IsSettlers() const { return typeId == static_cast<int>(CivUnitId::Settlers); }
+	bool IsDiplomat() const { return typeId == static_cast<int>(CivUnitId::Diplomat); }
+	bool IsCaravan() const { return typeId == static_cast<int>(CivUnitId::Caravan); }
+
+	// CivOne ShieldCosts: every unit except Diplomat/Caravan costs shields (settlers included).
+	bool RequiresShieldSupport() const
+	{
+		return Valid() && !IsDiplomat() && !IsCaravan();
+	}
+
+	// Martial law: military units with attack power (not settlers / diplomats / caravans).
+	bool CountsForMartialLaw() const
+	{
+		return RequiresShieldSupport() && !IsSettlers() && Def().attack >= 1;
+	}
+
+	// Republic/Democracy: non-exempt units away from their home city cause unhappiness.
+	bool CanCauseWarUnhappiness() const
+	{
+		return RequiresShieldSupport() && !IsSettlers();
+	}
+
 	bool IsDefender() const
 	{
 		switch (static_cast<CivUnitId>(typeId))

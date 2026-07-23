@@ -372,6 +372,42 @@ public:
 		int taxmen = 0,
 		int scientists = 0);
 
+	// --- unit support (shields) ---
+
+	// CivOne ShieldCosts: home units except Diplomat/Caravan.
+	// Despotism/Anarchy: first `size` free; others: 1 each.
+	static int ComputeShieldSupportCost(CivGovernment government, int citySize,
+		int homeSupportUnitCount);
+
+	// Factory (+50%, or +100% with Nuclear Plant). tileShields = raw worked yield.
+	int ApplyFactoryBonus(int tileShields) const;
+
+	// Net shields toward production this turn: max(0, factory(tile) - support).
+	// Disorder → 0.
+	int ComputeShieldIncome(int tileShields, int supportCost, bool inDisorder) const;
+
+	// --- citizen happiness ---
+
+	// Inputs for UpdateHappiness (filled by empire code with unit/map context).
+	struct HappinessParams
+	{
+		CivGovernment government = CivGovernment::Despotism;
+		int luxuries = 0;              // luxury arrows after market/bank
+		int freeContent = 4;           // CivFreeContentCitizens(difficulty, human)
+		bool hasMysticism = false;     // doubles temple
+		bool empireHasOracle = false;  // doubles temple again
+		bool empireHasHangingGardens = false;
+		bool empireHasCureForCancer = false;
+		bool empireHasBachOnContinent = false; // -2 unhappy
+		int martialLawUnits = 0;       // military in city (capped at 3 internally)
+		int awayMilitaryUnits = 0;     // home units not on city tile (rep/dem)
+		bool hasWomensSuffrage = false; // halves war unhappiness (classic-ish)
+	};
+
+	// Recompute happy / content / unhappy from luxuries, buildings, gov, units.
+	// Matches CivOne City.Citizens + martial law / war unhappiness.
+	void UpdateHappiness(const HappinessParams& params);
+
 	// Found a new city (capital or otherwise).
 	static CivCity Found(int cityId, int mapX, int mapY, int ownerPlayer,
 		const std::string& cityName, bool isCapital = false)

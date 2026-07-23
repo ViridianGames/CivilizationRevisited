@@ -161,6 +161,19 @@ namespace
 		y.shields = static_cast<int>(std::floor(static_cast<double>(y.shields) * 1.5));
 		y.trade = static_cast<int>(std::floor(static_cast<double>(y.trade) * 1.5));
 	}
+
+	// Classic Civ1 Despotism/Anarchy: any resource of 3+ on a tile loses 1.
+	void ApplyDespotismPenalty(CivYields& y, CivGovYieldGroup gov)
+	{
+		if (gov != CivGovYieldGroup::Despotic)
+			return;
+		if (y.food >= 3)
+			--y.food;
+		if (y.shields >= 3)
+			--y.shields;
+		if (y.trade >= 3)
+			--y.trade;
+	}
 }
 
 CivYields CivComputeTileYields(
@@ -172,6 +185,7 @@ CivYields CivComputeTileYields(
 	CivYields y = TileProperties(terrainId, special, imp);
 	ApplyGovernment(y, terrainId, special, imp, govGroup);
 	ApplyRailroad(y, imp.railRoad);
+	ApplyDespotismPenalty(y, govGroup);
 	// Clamp negatives (should not happen).
 	y.food = std::max(0, y.food);
 	y.shields = std::max(0, y.shields);

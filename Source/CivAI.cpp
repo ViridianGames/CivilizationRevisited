@@ -111,7 +111,7 @@ namespace
 
 	bool Despotic(CivGovernment g)
 	{
-		return g == CivGovernment::Anarchy || g == CivGovernment::Despotism;
+		return CivGovIsDespotic(g);
 	}
 
 	// ---- map geometry ----------------------------------------------------------
